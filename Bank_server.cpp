@@ -1,47 +1,110 @@
 #include "Bank_data.h"
 
-BankSHM* init_shm() {
-    int fd = shm_open(SHM_NAME, O_CREAT | O_RDWR | O_EXCL, 0666);
-    if(fd = -1) {
-        perror("shm_open (create)");
-        return nullptr;
-    }
+class Sem_manager {
+    private:
+        sem_t* sem;
+    public:
 
-    if (ftruncate(fd, sizeof(BankSHM)) == -1) {
-        perror("ftruncate");
-        close(fd);
-        return nullptr;
-    }
+        Sem_manager() {
+            sem = sem_open(SEM_NAME, O_CREAT | O_EXCL, 0666, 1);
+            if (sem == SEM_FAILED){
+                std::cerr << "Failed open semaphore. \n";
+            }
+        }
 
-    BankSHM* shm = (BankSHM*)mmap(nullptr, sizeof(BankSHM), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-    close(fd);
+        ~Sem_manager() {
+            sem_close(sem);
+        }
 
-    if (shm == MAP_FAILED) {
-        perror("mmap");
-        return nullptr;
-    }
+        void lock() {
+            sem_wait(sem);
+        }
 
-    for (int i = 0; i < MAX_USERS; i++) {
-        shm->users[i].user_id = i;
-        shm->users[i].balance = 0;
-    }
+        void unlock() {
+            sem_post(sem);
+        }
+};
 
-    shm->trans_count = 0;
-    
-    std::cout << "Server: Shared memory initialized. \n";
-    return shm;
-}
+class BankServer {
+    private: 
+        BankSHM *bank;
+        Sem_manager &sem;
+        int shm_fd;
+        int sock_fd;
 
-sem_t* create_semaphore() {
-    sem_t* sem = sem_open(SEM_NAME, O_CREAT | O_EXCL, 0666, 1);
+    public:
+        void init_SHM();
+        void initUsers();
+        void initSocket();
 
-    if (sem == SEM_FAILED) {
-        perror("sem_open");
-        exit(1);
-    }
+    private:
+        void init_SHM(){
+            shm_fd = shm_open(SHM_NAME, O_CREAT | O_RDWR, 0666);
 
-    std::cout << "Server: Semaphore created. \n";
-    return sem;
-}
+            if (shm_fd < 0) {
+                std::cerr << "shm_open() failed. \n";
+            }
+
+            ftruncate(shm_fd, sizeof(BankSHM));
+
+            bank = (BankSHM*)mmap(0, sizeof(BankSHM), PROT_READ | PROT_WRITE, MAP_SHARED, shm_fd, 0);
+
+            if (bank->trans_count == 0) {
+                bank->trans_count =0;
+            }
+        }
+
+        void initUsers() {
+            for(int i  = 0; i < MAX_USERS; i++) {
+                bank->users[i].user_id = i;
+                bank->users[i].balance = 0;
+            }
+        }
+
+        void initSocket() {
+            sock_fd = socket(AF_INET, SOCK_STREAM, 0);
+
+            sockaddr_in addr{};
+            addr.sin_family = AF_INET;
+            addr.sin_addr.s_addr = INADDR_ANY;
+            addr.sin_port = htons(PORT);
+
+            bind(sock_fd, (sockaddr*)&addr, sizeof(addr));
+            listen(sock_fd, 10);
+        }
+        
+};
+
+class BankService {
+    private:
+        BankSHM *bank;
+        Sem_manager &sem;
+        Transaction *t;
+    public:
+        BankService(BankSHM *bank, Sem_manager &sem, Transaction) : bank(bank), sem(sem){}
+
+        bool deposit(int user_id, int amount) {
+            sem.lock();
+            bank->users[user_id].balance += amount;
+            bank->trans[user_id].user_id = user_id;
+            bank->trans[user_id].type = T_DEPOSIT;
+            sem.unlock();
+            return true;
+        }
+        
+        bool withdraw(int user_id, int amount) {
+            sem.lock();
+            if(amount > bank->users[user_id].balance) {
+                return false;
+            }
+            else {
+                bank->users[user_id].balance -= amount;
+                bank->users[user_id].user_id = user_id;
+                bank->trans[user_id].type = T_WITHDRAW;
+            }
+        }
+
+
+};
 
 

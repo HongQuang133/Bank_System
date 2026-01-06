@@ -13,11 +13,16 @@
 #include <fcntl.h>
 #include <sys/ipc.h>
 #include <time.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <netinet/ip.h>
+
 
 #define SHM_NAME "/bank_shm_file"
 #define SEM_NAME "/bank_semaphore"
 #define MAX_USERS 1000
 #define MAX_TRANS 10000
+#define PORT 8080
 
 
 enum Trans_type{
@@ -34,26 +39,6 @@ enum Request_type {
     REQ_UNDO,
     REQ_BALANCE,
     REQ_EXIT
-};
-
-enum Response_type {
-    RES_SUCCESS,
-    RES_ERROR,
-    RES_BALANCE
-};
-
-struct Request {
-    Request_type type;
-    int user_id;
-    int target_id;
-    double amount;
-    pid_t client_pid;
-};
-
-struct Response {
-    Response_type type;
-    double balance;
-    char message[100];
 };
 
 struct User {
@@ -74,7 +59,4 @@ struct BankSHM{
     User users[MAX_USERS];
     Transaction trans[MAX_TRANS];
     int trans_count;
-};
-
-class Bank{
 };

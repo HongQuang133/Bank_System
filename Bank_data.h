@@ -32,22 +32,13 @@ enum Trans_type{
     T_UNDO
 };
 
-enum Request_type {
-    REQ_DEPOSIT,
-    REQ_WITHDRAW,
-    REQ_TRANSFER,
-    REQ_UNDO,
-    REQ_BALANCE,
-    REQ_EXIT
-};
-
 struct User {
     int user_id;
     double balance;
 };
 
 struct Transaction {
-    int trans_id;
+    int user_id;
     int user_from;
     int user_to;
     double amount;

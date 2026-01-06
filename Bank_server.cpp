@@ -80,14 +80,14 @@ class BankService {
         BankSHM *bank;
         Sem_manager &sem;
         Transaction *t;
+
     public:
         BankService(BankSHM *bank, Sem_manager &sem, Transaction) : bank(bank), sem(sem){}
 
         bool deposit(int user_id, int amount) {
             sem.lock();
             bank->users[user_id].balance += amount;
-            bank->trans[user_id].user_id = user_id;
-            bank->trans[user_id].type = T_DEPOSIT;
+            addTransaction(user_id, amount, bank->trans[user_id].type = T_DEPOSIT);
             sem.unlock();
             return true;
         }
@@ -99,12 +99,17 @@ class BankService {
             }
             else {
                 bank->users[user_id].balance -= amount;
-                bank->users[user_id].user_id = user_id;
-                bank->trans[user_id].type = T_WITHDRAW;
+                addTransaction(user_id, amount, bank->trans[user_id].type = T_WITHDRAW);
             }
+            sem.unlock();
         }
 
-
+    private:
+        void addTransaction(int user_id, int amount, int type) {
+            if(bank->trans_count >= MAX_TRANS) return;
+            Transaction &t = bank->trans[bank->trans_count++];
+            t = {user_id, amount, type, time_t(nullptr), false};
+        }
 };
 
 
